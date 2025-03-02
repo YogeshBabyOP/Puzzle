@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Jigsaw Puzzle Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: #fff;
+      text-align: center;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    label, select {
+      font-size: 18px;
+      margin-right: 10px;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    /* Container for the original image */
+    #original {
+      width: 300px;
+      height: 300px;
+      border: 2px solid #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      background-color: #111;
+    }
+    #original img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    /* Puzzle container as a grid */
+    #puzzle {
+      width: 300px;
+      height: 300px;
+      border: 2px solid #fff;
+      display: grid;
+    }
+    /* Each drop zone cell with a white border */
+    .dropzone {
+      width: 100%;
+      height: 100%;
+      border: 1px solid #fff;
+      box-sizing: border-box;
+      position: relative;
+    }
+    /* Puzzle piece styling */
+    .piece {
+      width: 100%;
+      height: 100%;
+      cursor: move;
+      background-size: 300px 300px; /* match the puzzle container size */
+    }
+    #message {
+      margin-top: 20px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Jigsaw Puzzle Game</h1>
+  <div>
+    <label for="gridSizeSelect">Select Puzzle Size:</label>
+    <select id="gridSizeSelect">
+      <option value="3">3 x 3</option>
+      <option value="4">4 x 4</option>
+      <option value="5">5 x 5</option>
+    </select>
+  </div>
+  <div style="margin-top: 10px;">
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+  <div class="container">
+    <div id="original">
+      <p>Original Image</p>
+    </div>
+    <div id="puzzle">
+      <!-- Puzzle grid will be built here -->
+    </div>
+  </div>
+  <div id="message"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const gridSizeSelect = document.getElementById('gridSizeSelect');
+    const originalDiv = document.getElementById('original');
+    const puzzleDiv = document.getElementById('puzzle');
+    const messageDiv = document.getElementById('message');
+    let imageUrl;  // to store the image source URL
+
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          imageUrl = event.target.result;
+          // Display the original image in the left container
+          originalDiv.innerHTML = '<img src="' + imageUrl + '" alt="Original Image">';
+          // Build the puzzle on the right using the chosen grid size
+          createPuzzle();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function createPuzzle() {
+      // Clear any existing puzzle and message
+      puzzleDiv.innerHTML = '';
+      messageDiv.textContent = '';
+      
+      // Get grid size from the selection
+      const gridSize = parseInt(gridSizeSelect.value);
+      const pieceWidth = 300 / gridSize;
+      const pieceHeight = 300 / gridSize;
+
+      // Set the grid template based on grid size
+      puzzleDiv.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+      puzzleDiv.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+
+      // Create drop zones for each cell in the grid
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const row = Math.floor(i / gridSize);
+        const col = i % gridSize;
+        const cell = document.createElement('div');
+        cell.classList.add('dropzone');
+        // Store the expected row and col for the dropzone
+        cell.dataset.row = row;
+        cell.dataset.col = col;
+        cell.addEventListener('dragover', function(e) {
+          e.preventDefault();
+        });
+        cell.addEventListener('drop', handleDrop);
+        puzzleDiv.appendChild(cell);
+      }
+
+      // Create an array representing the correct order (each cell’s row and column)
+      let piecesOrder = [];
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          piecesOrder.push({ row, col });
+        }
+      }
+      // Shuffle the order so the pieces are placed randomly
+      piecesOrder.sort(() => Math.random() - 0.5);
+
+      // Create puzzle pieces based on the shuffled order
+      piecesOrder.forEach((piece, index) => {
+        const pieceDiv = document.createElement('div');
+        pieceDiv.classList.add('piece');
+        pieceDiv.draggable = true;
+        // Store the correct piece coordinates for later checking
+        pieceDiv.dataset.correctRow = piece.row;
+        pieceDiv.dataset.correctCol = piece.col;
+        pieceDiv.style.backgroundImage = 'url(' + imageUrl + ')';
+        // Calculate background position so that each piece shows its part of the image
+        pieceDiv.style.backgroundPosition = (-piece.col * pieceWidth) + 'px ' + (-piece.row * pieceHeight) + 'px';
+        pieceDiv.addEventListener('dragstart', handleDragStart);
+
+        // Place the piece into a dropzone (using the same index order as created)
+        puzzleDiv.children[index].appendChild(pieceDiv);
+      });
+    }
+
+    let draggedPiece = null;
+
+    function handleDragStart(e) {
+      draggedPiece = this;
+      e.dataTransfer.setData('text/plain', ''); // required for Firefox
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const targetZone = this;
+      const sourceZone = draggedPiece.parentElement;
+      // If dropping into the same cell, do nothing
+      if (targetZone === sourceZone) return;
+      
+      // If the target dropzone already has a piece, swap the pieces
+      if (targetZone.children.length > 0) {
+        const targetPiece = targetZone.children[0];
+        sourceZone.appendChild(targetPiece);
+      }
+      // Place the dragged piece into the target dropzone
+      targetZone.appendChild(draggedPiece);
+
+      // Check if the puzzle is complete after each drop
+      checkPuzzleComplete();
+    }
+
+    function checkPuzzleComplete() {
+      const dropzones = document.querySelectorAll('.dropzone');
+      let complete = true;
+      dropzones.forEach(zone => {
+        // If the zone is empty, puzzle is not complete
+        if (zone.children.length === 0) {
+          complete = false;
+          return;
+        }
+        const piece = zone.children[0];
+        // Compare the dropzone's expected row/col with the piece's correct row/col
+        if (zone.dataset.row !== piece.dataset.correctRow || zone.dataset.col !== piece.dataset.correctCol) {
+          complete = false;
+        }
+      });
+
+      if (complete) {
+        messageDiv.textContent = "Congratulations! You've completed the puzzle!";
+      }
+    }
+  </script>
+</body>
+</html>
